@@ -566,9 +566,9 @@ class Board(object):
         """
         coor = risk.definitions.territory_locations[territory_id]
         plt.scatter(
-            [coor[0]*1.2], 
-            [coor[1]*1.22], 
-            s=400, 
+            [coor[0]*1.2],
+            [coor[1]*1.22],
+            s=400,
             c=risk.definitions.player_colors[player_id],
             zorder=2
             )
@@ -607,7 +607,7 @@ class Board(object):
     @staticmethod
     def throw_dice():
         """
-        Throw a dice. 
+        Throw a dice.
         Returns:
             int: random int in [1, 6]. """
         return random.randint(1, 6)
