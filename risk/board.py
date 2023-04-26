@@ -35,10 +35,8 @@ class Board(object):
     def create(cls, n_players):
         """
         Create a Board and randomly allocate the territories. Place one army on each territory.
-        
         Args:
             n_players (int): Number of players.
-                
         Returns:
             Board: A board with territories randomly allocated to the players.
         """
@@ -48,12 +46,11 @@ class Board(object):
 
     # ====================== #
     # == Neighbor Methods == #
-    # ====================== #   
+    # ====================== #
 
     def neighbors(self, territory_id):
         """
-        Create a generator of all territories neighboring a given territory.
-            
+        Create a generator of all territories neighboring a given territory. 
         Args:
             territory_id (int): ID of the territory to find neighbors of.
 
@@ -111,6 +108,21 @@ class Board(object):
         Returns:
             bool: True if the input path is valid
         '''
+        if not len(set(path)) == len(path):
+            return False
+
+        def go(xs):
+            if len(xs) <= 1:
+                return True
+            # print("xs[0]=", xs[0])
+            neighbors = list(self.neighbors(xs[0]))
+            neighbors = [neighbor.territory_id for neighbor in neighbors]
+            print("neighbors=", neighbors)
+            if xs[1] in neighbors:
+                return self.is_valid_path(xs[1:])
+            else:
+                return  False
+        return go(path) 
 
     
     def is_valid_attack_path(self, path):
@@ -130,7 +142,12 @@ class Board(object):
         Returns:
             bool: True if the path is an attack path
         '''
-
+        # each node has to be a neigbor but an enemy neighbor. USE hostile neighbor function!!
+        ret = self.is_valid_path(path)
+        ret &= len(path) > 1
+        for i in path[1:]:
+            ret &= self.owner(i) != self.owner(path[0])
+        return ret
 
     def cost_of_attack_path(self, path):
         '''
@@ -143,6 +160,11 @@ class Board(object):
         Returns:
             bool: the number of enemy armies in the path
         '''
+        #return an actual number
+        total_cost = 0
+        for i in path[1:]:
+            total_cost += self.data[i].armies
+        return total_cost
 
 
     def shortest_path(self, source, target):
@@ -154,14 +176,36 @@ class Board(object):
         and when multiple shortest paths exist,
         then this function can return any of those paths.
 
-        Args:
+    Args:
             source (int): a territory_id that is the source location
             target (int): a territory_id that is the target location
 
         Returns:
             [int]: a valid path between source and target that has minimum length; this path is guaranteed to exist
         '''
+        from collections import deque
+        import copy
 
+        dictionary = {}
+        dictionary[source] = [source]
+        queue = deque()
+        queue.append(source)
+        visited = set()
+        visited.add(source)
+
+        while queue:
+            current_territory = queue.popleft()
+            if current_territory == target:
+                return dictionary[current_territory]
+            n = risk.definitions.territory_neighbors[current_territory]
+            for territory in n:
+                if territory not in visited:
+                    visited.add(territory)
+                    copy_of_path = copy.copy(dictionary[current_territory])
+                    copy_of_path.append(territory)
+                    dictionary[territory] = copy_of_path
+                    queue.append(territory)
+        return None
 
     def can_fortify(self, source, target):
         '''
@@ -176,6 +220,29 @@ class Board(object):
         Returns:
             bool: True if reinforcing the target from the source territory is a valid move
         '''
+        from collections import deque
+
+        # Check if source and target territories are owned by the same player
+        if self.owner(source) != self.owner(target):
+            return False
+
+        # Use BFS to find a valid path between the source and target territories
+        queue = deque()
+        visited = set()
+        queue.append(source)
+        visited.add(source)
+
+        while queue:
+            current_territory = queue.popleft()
+            if current_territory == target:
+                return True
+            n = risk.definitions.territory_neighbors[current_territory]
+            for territory in n:
+                if territory not in visited and self.owner(territory) == self.owner(source):
+                    queue.append(territory)
+                    visited.add(territory)
+
+        return False
 
 
     def cheapest_attack_path(self, source, target):
@@ -191,8 +258,38 @@ class Board(object):
         Returns:
             [int]: a list of territory_ids representing the valid attack path; if no path exists, then it returns None instead
         '''
-
-
+        from queue import PriorityQueue
+        import copy
+        # Create a dictionary whose keys are territories and values are path
+        pid = self.owner(source)
+        if pid == self.owner(target):
+            return None
+        dictionary = {source: [source]}
+        pq = PriorityQueue()
+        pq.put((0, source))
+        visited = set()
+        visited.add(source)
+        while not pq.empty():
+            current_priority, current_territory = pq.get()
+            if current_territory == target:
+                return dictionary[current_territory]
+            r = risk.definitions.territory_neighbors[current_territory]
+            for territory in r:
+                if territory not in visited and pid != self.owner(territory):
+                    new = dictionary[current_territory].copy()
+                    new.append(territory)
+                    priority = current_priority + self.data[territory].armies
+                    if territory not in [x[1] for x in pq.queue]:
+                        dictionary[territory] = new
+                        pq.put((priority, territory))
+                    elif priority < min([x[0] for x in pq.queue if x[1] == territory]):
+                        dictionary[territory] = new
+                        for i, (priority, territory) in enumerate(pq.queue):
+                            if t == territory:
+                                pq.queue[i] = (priority, territory)
+                                break
+            visited.add(current_territory)
+        return None
     def can_attack(self, source, target):
         '''
         Args:
@@ -202,8 +299,10 @@ class Board(object):
         Returns:
             bool: True if a valid attack path exists between source and target; else False
         '''
-
-
+        if self.cheapest_attack_path(source, target):
+            return True
+        else:
+            return False
     # ======================= #
     # == Continent Methods == #
     # ======================= #
@@ -211,7 +310,7 @@ class Board(object):
     def continent(self, continent_id):
         """
         Create a generator of all territories that belong to a given continent.
-            
+         
         Args:
             continent_id (int): ID of the continent.
 
@@ -474,17 +573,17 @@ class Board(object):
             zorder=2
             )
         plt.text(
-            coor[0]*1.2, 
-            coor[1]*1.22 + 15, 
+            coor[0]*1.2,
+            coor[1]*1.22 + 15,
             s=str(armies),
             color='black' if risk.definitions.player_colors[player_id] in ['yellow', 'pink'] else 'white',
-            ha='center', 
+            ha='center',
             size=15
             )
 
     # ==================== #
     # == Combat Methods == #
-    # ==================== #    
+    # ==================== #
 
     @classmethod
     def fight(cls, attackers, defenders):
@@ -508,8 +607,7 @@ class Board(object):
     @staticmethod
     def throw_dice():
         """
-        Throw a dice.
-        
+        Throw a dice. 
         Returns:
             int: random int in [1, 6]. """
         return random.randint(1, 6)
